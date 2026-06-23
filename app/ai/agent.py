@@ -66,7 +66,16 @@ If user asks whether a time is available, asks about free slots, or asks when th
 Return:
 {{
   "intent": "schedule_query",
-  "answer": "Answer in Armenian using available schedules only."
+  "answer": "Answer in Armenian using available schedules only.",
+  "schedule_id": 1
+}}
+
+If matching schedule is not available:
+Return:
+{{
+  "intent": "schedule_query",
+  "answer": "Answer in Armenian. Say that the requested time is not available and suggest available schedules if any.",
+  "schedule_id": null
 }}
 
 If user wants to book an appointment or consultation:
@@ -76,8 +85,12 @@ Return:
   "patient_name": "...",
   "phone": "...",
   "complaint": "...",
-  "preferred_time": "..."
+  "preferred_time": "...",
+  "schedule_id": 1
 }}
+
+If the user chooses one of the available schedules, include the matching schedule_id.
+If schedule_id is unknown or not selected, use null.
 
 Missing values must be null.
 
@@ -85,7 +98,8 @@ Rules:
 - Return JSON only.
 - Do not give medical diagnosis.
 - Do not invent prices, doctors, addresses, or schedules.
-- If information is not available in clinic knowledge or schedules, say that administrator will clarify.
+- Use only provided clinic knowledge and available schedules.
+- If information is not available, say that administrator will clarify.
 - Always answer in Armenian.
 
 User message:
@@ -118,6 +132,7 @@ User message:
         return {
             "type": "schedule_query",
             "answer": data.get("answer"),
+            "schedule_id": data.get("schedule_id"),
         }
 
     missing = []

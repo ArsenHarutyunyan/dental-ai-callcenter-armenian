@@ -135,6 +135,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         return {
             "status": "schedule_answered",
             "answer": bot_answer,
+            "schedule_id": result.get("schedule_id")
         }
 
     if not result["ready"]:
@@ -171,8 +172,9 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         }
 
     data = result["data"]
-
+    schedule_id = data.get("schedule_id")
     appointment = Appointment(
+        schedule_id=schedule_id,
         clinic_id=request.clinic_id,
         patient_name=data["patient_name"],
         phone=data["phone"],
@@ -180,6 +182,15 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         preferred_time=data["preferred_time"],
         status="new",
     )
+    if schedule_id:
+        schedule = (
+            db.query(DoctorSchedule).filter(
+            DoctorSchedule.id == schedule_id
+            ).first()
+        )
+
+    if schedule:
+        schedule.status = "booked"
 
     db.add(appointment)
     db.commit()

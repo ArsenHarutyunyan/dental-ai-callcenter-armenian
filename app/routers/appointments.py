@@ -23,29 +23,30 @@ def create_appointment(
 ):
     if request.schedule_id:
         schedule = (
-        db.query(DoctorSchedule)
-        .filter(DoctorSchedule.id == request.schedule_id)
-        .first()
-    )
+            db.query(DoctorSchedule)
+            .filter(DoctorSchedule.id == request.schedule_id)
+            .first()
+        )
 
-    if not schedule:
-        return {"error": "Schedule not found"}
+        if not schedule:
+            return {"error": "Schedule not found"}
 
-    if schedule.status != "available":
-        return {"error": "Schedule is not available"}
+        if schedule.status != "available":
+            return {"error": "Schedule is not available"}
 
-    schedule.status = "booked"
+        schedule.status = "booked"
+
     appointment = Appointment(
         clinic_id=request.clinic_id,
         patient_id=request.patient_id,
         doctor_id=request.doctor_id,
         service_id=request.service_id,
+        schedule_id=request.schedule_id,
         patient_name=request.patient_name,
         phone=request.phone,
         complaint=request.complaint,
         preferred_time=request.preferred_time,
         status=request.status,
-        schedule_id=request.schedule_id,
     )
 
     db.add(appointment)
@@ -125,6 +126,16 @@ def delete_appointment(
 
     if not appointment:
         return {"error": "Appointment not found"}
+
+    if appointment.schedule_id:
+        schedule = (
+            db.query(DoctorSchedule)
+            .filter(DoctorSchedule.id == appointment.schedule_id)
+            .first()
+        )
+
+        if schedule:
+            schedule.status = "available"
 
     db.delete(appointment)
     db.commit()
