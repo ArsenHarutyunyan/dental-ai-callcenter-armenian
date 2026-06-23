@@ -34,6 +34,7 @@ class AppointmentCreate(BaseModel):
     patient_id: int | None = None
     doctor_id: int | None = None
     service_id: int | None = None
+    schedule_id:int | None = None
     status: str = "new"
     
 class AppointmentUpdate(BaseModel):
@@ -74,3 +75,13 @@ class KnowledgeBaseCreate(BaseModel):
     category: str
     title: str
     content: str
+    
+class DoctorScheduleCreate(BaseModel):
+    doctor_id: int
+    date: str
+    start_time: str
+    end_time: str
+
+
+class DoctorScheduleUpdate(BaseModel):
+    status: str

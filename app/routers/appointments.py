@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Appointment
+from app.models import Appointment, DoctorSchedule
 from app.schemas import AppointmentCreate, AppointmentUpdate
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
@@ -21,6 +21,20 @@ def create_appointment(
     request: AppointmentCreate,
     db: Session = Depends(get_db),
 ):
+    if request.schedule_id:
+        schedule = (
+        db.query(DoctorSchedule)
+        .filter(DoctorSchedule.id == request.schedule_id)
+        .first()
+    )
+
+    if not schedule:
+        return {"error": "Schedule not found"}
+
+    if schedule.status != "available":
+        return {"error": "Schedule is not available"}
+
+    schedule.status = "booked"
     appointment = Appointment(
         clinic_id=request.clinic_id,
         patient_id=request.patient_id,
@@ -31,6 +45,7 @@ def create_appointment(
         complaint=request.complaint,
         preferred_time=request.preferred_time,
         status=request.status,
+        schedule_id=request.schedule_id,
     )
 
     db.add(appointment)

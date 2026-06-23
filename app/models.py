@@ -69,7 +69,7 @@ class Appointment(Base):
     complaint = Column(String, nullable=False)
     preferred_time = Column(String, nullable=True)
     status = Column(String, default="new")
-
+    schedule_id = Column(Integer, ForeignKey("doctor_schedules.id"), nullable=True)
     clinic = relationship("Clinic", back_populates="appointments")
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("Doctor", back_populates="appointments")
@@ -99,3 +99,21 @@ class KnowledgeBase(Base):
     title = Column(String, nullable=False)
 
     content = Column(String, nullable=False)
+    
+class DoctorSchedule(Base):
+    __tablename__ = "doctor_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    doctor_id = Column(
+        Integer,
+        ForeignKey("doctors.id"),
+        nullable=False,
+    )
+
+    date = Column(String, nullable=False)
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+    status = Column(String, default="available")
+
+    doctor = relationship("Doctor")

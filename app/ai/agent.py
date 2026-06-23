@@ -32,54 +32,63 @@ Content: {item.content}
 def process_message(
     user_message: str,
     knowledge_context: str = "",
+    schedule_context: str = "",
 ):
     prompt = f"""
 You are an AI dental clinic assistant.
+
+You must understand Armenian messages.
 
 Clinic knowledge:
 
 {knowledge_context}
 
-Your task:
+Available schedules:
 
-Detect intent.
+{schedule_context}
+
+Your task is to detect the user's intent.
 
 Possible intents:
 
 1. faq
 2. appointment
+3. schedule_query
 
-If user is asking:
-- prices
-- doctors
-- services
-- address
-- schedule
-
+If user asks about prices, services, address, doctors, working hours, or general clinic information:
 Return:
-
 {{
-    "intent":"faq",
-    "answer":"..."
+  "intent": "faq",
+  "answer": "Answer in Armenian using clinic knowledge only."
 }}
 
-If user wants appointment or consultation:
-
+If user asks whether a time is available, asks about free slots, or asks when the doctor is free:
 Return:
-
 {{
-    "intent":"appointment",
-    "patient_name":"...",
-    "phone":"...",
-    "complaint":"...",
-    "preferred_time":"..."
+  "intent": "schedule_query",
+  "answer": "Answer in Armenian using available schedules only."
+}}
+
+If user wants to book an appointment or consultation:
+Return:
+{{
+  "intent": "appointment",
+  "patient_name": "...",
+  "phone": "...",
+  "complaint": "...",
+  "preferred_time": "..."
 }}
 
 Missing values must be null.
 
-Return JSON only.
+Rules:
+- Return JSON only.
+- Do not give medical diagnosis.
+- Do not invent prices, doctors, addresses, or schedules.
+- If information is not available in clinic knowledge or schedules, say that administrator will clarify.
+- Always answer in Armenian.
 
-User:
+User message:
 
 {user_message}
 """
@@ -93,19 +102,22 @@ User:
             }
         ],
         temperature=0,
-        response_format={
-            "type": "json_object"
-        },
+        response_format={"type": "json_object"},
     )
 
-    content = response.choices[0].message.content
-
+    content = response.choices[0].message.content.strip()
     data = json.loads(content)
 
     if data["intent"] == "faq":
         return {
             "type": "faq",
-            "answer": data["answer"],
+            "answer": data.get("answer"),
+        }
+
+    if data["intent"] == "schedule_query":
+        return {
+            "type": "schedule_query",
+            "answer": data.get("answer"),
         }
 
     missing = []

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.agent import build_knowledge_context, process_message
 from app.database import SessionLocal
-from app.models import Appointment, ChatMessage, KnowledgeBase
+from app.models import Appointment, ChatMessage, KnowledgeBase, DoctorSchedule
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -25,9 +25,44 @@ def get_db():
         db.close()
 
 
+def build_schedule_context(schedules):
+    if not schedules:
+        return "No available schedules"
+
+    parts = []
+
+    for schedule in schedules:
+        parts.append(
+            f"""
+Schedule ID: {schedule.id}
+Doctor ID: {schedule.doctor_id}
+Date: {schedule.date}
+Start: {schedule.start_time}
+End: {schedule.end_time}
+Status: {schedule.status}
+"""
+        )
+
+    return "\n".join(parts)
+
+
+@router.get("/history/{session_id}")
+def get_chat_history(
+    session_id: str,
+    db: Session = Depends(get_db),
+):
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.id)
+        .all()
+    )
+
+    return messages
+
+
 @router.post("/")
 def chat(request: ChatRequest, db: Session = Depends(get_db)):
-    # 1. Save user message to PostgreSQL
     db.add(
         ChatMessage(
             session_id=request.session_id,
@@ -38,14 +73,12 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     )
     db.commit()
 
-    # 2. Keep temporary in-memory session
     session_messages = chat_sessions.get(request.session_id, [])
     session_messages.append(request.message)
     chat_sessions[request.session_id] = session_messages
 
     combined_message = "\n".join(session_messages)
 
-    # 3. Load clinic knowledge
     knowledge_items = (
         db.query(KnowledgeBase)
         .filter(KnowledgeBase.clinic_id == request.clinic_id)
@@ -54,13 +87,20 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
     knowledge_context = build_knowledge_context(knowledge_items)
 
-    # 4. Process message with AI agent
+    available_schedules = (
+        db.query(DoctorSchedule)
+        .filter(DoctorSchedule.status == "available")
+        .all()
+    )
+
+    schedule_context = build_schedule_context(available_schedules)
+
     result = process_message(
         combined_message,
         knowledge_context,
+        schedule_context,
     )
 
-    # 5. FAQ answer
     if result["type"] == "faq":
         bot_answer = result["answer"]
 
@@ -79,7 +119,24 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
             "answer": bot_answer,
         }
 
-    # 6. Appointment missing data
+    if result["type"] == "schedule_query":
+        bot_answer = result["answer"]
+
+        db.add(
+            ChatMessage(
+                session_id=request.session_id,
+                clinic_id=request.clinic_id,
+                role="assistant",
+                message=bot_answer,
+            )
+        )
+        db.commit()
+
+        return {
+            "status": "schedule_answered",
+            "answer": bot_answer,
+        }
+
     if not result["ready"]:
         missing = result["missing"]
 
@@ -113,7 +170,6 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
             "answer": bot_answer,
         }
 
-    # 7. Create appointment
     data = result["data"]
 
     appointment = Appointment(
@@ -144,7 +200,6 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     )
     db.commit()
 
-    # 8. Clear session after successful appointment
     chat_sessions.pop(request.session_id, None)
 
     return {
