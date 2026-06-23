@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Doctor
-from app.schemas import DoctorCreate
+from app.schemas import DoctorCreate, DoctorUpdate
 
 router = APIRouter(prefix="/doctors", tags=["Doctors"])
 
@@ -44,3 +44,42 @@ def get_doctor(doctor_id: int, db: Session = Depends(get_db)):
         return {"error": "Doctor not found"}
 
     return doctor
+
+@router.put("/{doctor_id}")
+def update_doctor(
+    doctor_id: int,
+    request: DoctorUpdate,
+    db: Session = Depends(get_db),
+):
+    doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+
+    if not doctor:
+        return {"error": "Doctor not found"}
+
+    doctor.clinic_id = request.clinic_id
+    doctor.full_name = request.full_name
+    doctor.specialization = request.specialization
+
+    db.commit()
+    db.refresh(doctor)
+
+    return doctor
+
+
+@router.delete("/{doctor_id}")
+def delete_doctor(
+    doctor_id: int,
+    db: Session = Depends(get_db),
+):
+    doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+
+    if not doctor:
+        return {"error": "Doctor not found"}
+
+    db.delete(doctor)
+    db.commit()
+
+    return {
+        "status": "deleted",
+        "doctor_id": doctor_id
+    }
