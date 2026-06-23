@@ -1,4 +1,6 @@
-from sqlalchemy import Column, ForeignKey, Integer, String
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -72,3 +74,17 @@ class Appointment(Base):
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("Doctor", back_populates="appointments")
     service = relationship("Service", back_populates="appointments")
+    
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    session_id = Column(String, nullable=False, index=True)
+    clinic_id = Column(Integer, nullable=False)
+
+    role = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    

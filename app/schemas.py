@@ -62,3 +62,9 @@ class ServiceUpdate(BaseModel):
     name: str
     description: str | None = None
     price: int | None = None
+    
+class ChatMessageCreate(BaseModel):
+    session_id: str
+    clinic_id: int
+    role: str
+    message: str

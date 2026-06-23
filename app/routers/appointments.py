@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-
 from app.database import SessionLocal
 from app.models import Appointment
 from app.schemas import AppointmentCreate, AppointmentUpdate
@@ -61,7 +60,6 @@ def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
 
     if not appointment:
         return {"error": "Appointment not found"}
-
     return appointment
 
 @router.put("/{appointment_id}")
@@ -111,3 +109,5 @@ def delete_appointment(
         "status": "deleted",
         "appointment_id": appointment_id
     }
+
+
