@@ -81,11 +81,11 @@ Return:
 If user wants to book an appointment or consultation:
 Return:
 {{
-  "intent": "appointment",
-  "patient_name": "...",
-  "phone": "...",
-  "complaint": "...",
-  "preferred_time": "...",
+  "intent":"appointment",
+  "patient_name":"...",
+  "phone":"...",
+  "complaint":"...",
+  "preferred_time":"...",
   "schedule_id": 1
 }}
 

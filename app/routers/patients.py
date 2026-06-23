@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Patient
+from app.models import Appointment, Patient
 from app.schemas import PatientCreate, PatientUpdate
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
@@ -17,7 +17,10 @@ def get_db():
 
 
 @router.post("/")
-def create_patient(request: PatientCreate, db: Session = Depends(get_db)):
+def create_patient(
+    request: PatientCreate,
+    db: Session = Depends(get_db),
+):
     patient = Patient(
         full_name=request.full_name,
         phone=request.phone,
@@ -36,13 +39,48 @@ def get_patients(db: Session = Depends(get_db)):
 
 
 @router.get("/{patient_id}")
-def get_patient(patient_id: int, db: Session = Depends(get_db)):
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+def get_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+):
+    patient = (
+        db.query(Patient)
+        .filter(Patient.id == patient_id)
+        .first()
+    )
 
     if not patient:
         return {"error": "Patient not found"}
 
     return patient
+
+
+@router.get("/{patient_id}/appointments")
+def get_patient_appointments(
+    patient_id: int,
+    db: Session = Depends(get_db),
+):
+    patient = (
+        db.query(Patient)
+        .filter(Patient.id == patient_id)
+        .first()
+    )
+
+    if not patient:
+        return {"error": "Patient not found"}
+
+    appointments = (
+        db.query(Appointment)
+        .filter(Appointment.patient_id == patient_id)
+        .order_by(Appointment.id.desc())
+        .all()
+    )
+
+    return {
+        "patient": patient,
+        "appointments": appointments,
+    }
+
 
 @router.put("/{patient_id}")
 def update_patient(
@@ -50,7 +88,11 @@ def update_patient(
     request: PatientUpdate,
     db: Session = Depends(get_db),
 ):
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    patient = (
+        db.query(Patient)
+        .filter(Patient.id == patient_id)
+        .first()
+    )
 
     if not patient:
         return {"error": "Patient not found"}
@@ -69,7 +111,11 @@ def delete_patient(
     patient_id: int,
     db: Session = Depends(get_db),
 ):
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    patient = (
+        db.query(Patient)
+        .filter(Patient.id == patient_id)
+        .first()
+    )
 
     if not patient:
         return {"error": "Patient not found"}
@@ -79,5 +125,5 @@ def delete_patient(
 
     return {
         "status": "deleted",
-        "patient_id": patient_id
+        "patient_id": patient_id,
     }

@@ -4,7 +4,13 @@ from sqlalchemy.orm import Session
 
 from app.ai.agent import build_knowledge_context, process_message
 from app.database import SessionLocal
-from app.models import Appointment, ChatMessage, KnowledgeBase, DoctorSchedule
+from app.models import (
+    Appointment,
+    ChatMessage,
+    DoctorSchedule,
+    KnowledgeBase,
+    Patient,
+)
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -73,11 +79,16 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     )
     db.commit()
 
-    session_messages = chat_sessions.get(request.session_id, [])
-    session_messages.append(request.message)
-    chat_sessions[request.session_id] = session_messages
+    session_data = chat_sessions.get(
+        request.session_id,
+        {
+            "messages": [],
+            "selected_schedule_id": None,
+        },
+    )
 
-    combined_message = "\n".join(session_messages)
+    session_data["messages"].append(request.message)
+    combined_message = "\n".join(session_data["messages"])
 
     knowledge_items = (
         db.query(KnowledgeBase)
@@ -114,6 +125,8 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         )
         db.commit()
 
+        chat_sessions[request.session_id] = session_data
+
         return {
             "status": "faq_answered",
             "answer": bot_answer,
@@ -121,6 +134,9 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
     if result["type"] == "schedule_query":
         bot_answer = result["answer"]
+
+        session_data["selected_schedule_id"] = result.get("schedule_id")
+        chat_sessions[request.session_id] = session_data
 
         db.add(
             ChatMessage(
@@ -135,7 +151,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         return {
             "status": "schedule_answered",
             "answer": bot_answer,
-            "schedule_id": result.get("schedule_id")
+            "schedule_id": result.get("schedule_id"),
         }
 
     if not result["ready"]:
@@ -164,6 +180,8 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         )
         db.commit()
 
+        chat_sessions[request.session_id] = session_data
+
         return {
             "status": "missing_data",
             "missing": missing,
@@ -172,25 +190,50 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         }
 
     data = result["data"]
-    schedule_id = data.get("schedule_id")
+
+    schedule_id = data.get("schedule_id") or session_data.get("selected_schedule_id")
+
+    if schedule_id:
+        schedule = (
+            db.query(DoctorSchedule)
+            .filter(DoctorSchedule.id == schedule_id)
+            .first()
+        )
+
+        if not schedule:
+            return {"error": "Schedule not found"}
+
+        if schedule.status != "available":
+            return {"error": "Schedule already booked"}
+
+        schedule.status = "booked"
+
+    patient = (
+        db.query(Patient)
+        .filter(Patient.phone == data["phone"])
+        .first()
+    )
+
+    if not patient:
+        patient = Patient(
+            full_name=data["patient_name"],
+            phone=data["phone"],
+        )
+
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+
     appointment = Appointment(
-        schedule_id=schedule_id,
         clinic_id=request.clinic_id,
+        patient_id=patient.id,
+        schedule_id=schedule_id,
         patient_name=data["patient_name"],
         phone=data["phone"],
         complaint=data["complaint"],
         preferred_time=data["preferred_time"],
         status="new",
     )
-    if schedule_id:
-        schedule = (
-            db.query(DoctorSchedule).filter(
-            DoctorSchedule.id == schedule_id
-            ).first()
-        )
-
-    if schedule:
-        schedule.status = "booked"
 
     db.add(appointment)
     db.commit()
@@ -216,6 +259,8 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     return {
         "status": "appointment_created",
         "appointment_id": appointment.id,
+        "patient_id": patient.id,
+        "schedule_id": schedule_id,
         "data": data,
         "answer": bot_answer,
     }

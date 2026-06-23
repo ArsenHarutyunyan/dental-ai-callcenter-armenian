@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -17,6 +17,21 @@ class Clinic(Base):
     doctors = relationship("Doctor", back_populates="clinic")
     services = relationship("Service", back_populates="clinic")
     appointments = relationship("Appointment", back_populates="clinic")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=True)
+
+    full_name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+
+    role = Column(String, default="operator")
+    is_active = Column(Boolean, default=True)
 
 
 class Patient(Base):
@@ -54,6 +69,22 @@ class Service(Base):
     appointments = relationship("Appointment", back_populates="service")
 
 
+class DoctorSchedule(Base):
+    __tablename__ = "doctor_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
+
+    date = Column(String, nullable=False)
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+
+    status = Column(String, default="available")
+
+    doctor = relationship("Doctor")
+
+
 class Appointment(Base):
     __tablename__ = "appointments"
 
@@ -63,18 +94,20 @@ class Appointment(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
     doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=True)
     service_id = Column(Integer, ForeignKey("services.id"), nullable=True)
+    schedule_id = Column(Integer, ForeignKey("doctor_schedules.id"), nullable=True)
 
     patient_name = Column(String, nullable=False)
     phone = Column(String, nullable=False)
     complaint = Column(String, nullable=False)
     preferred_time = Column(String, nullable=True)
     status = Column(String, default="new")
-    schedule_id = Column(Integer, ForeignKey("doctor_schedules.id"), nullable=True)
+
     clinic = relationship("Clinic", back_populates="appointments")
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("Doctor", back_populates="appointments")
     service = relationship("Service", back_populates="appointments")
-    
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
@@ -87,7 +120,8 @@ class ChatMessage(Base):
     message = Column(String, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
+
 class KnowledgeBase(Base):
     __tablename__ = "knowledge_base"
 
@@ -99,21 +133,3 @@ class KnowledgeBase(Base):
     title = Column(String, nullable=False)
 
     content = Column(String, nullable=False)
-    
-class DoctorSchedule(Base):
-    __tablename__ = "doctor_schedules"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    doctor_id = Column(
-        Integer,
-        ForeignKey("doctors.id"),
-        nullable=False,
-    )
-
-    date = Column(String, nullable=False)
-    start_time = Column(String, nullable=False)
-    end_time = Column(String, nullable=False)
-    status = Column(String, default="available")
-
-    doctor = relationship("Doctor")
