@@ -1,9 +1,11 @@
 from fastapi import FastAPI
-
 from app.routers import appointments, chat, clinics, doctors, patients, services
+from app.routers import knowledge
+
 
 app = FastAPI(title="Dental AI Call Center")
 
+app.include_router(knowledge.router)
 app.include_router(chat.router)
 app.include_router(clinics.router)
 app.include_router(patients.router)

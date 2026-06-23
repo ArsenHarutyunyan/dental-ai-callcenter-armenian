@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.ai.agent import process_message
+from app.ai.agent import build_knowledge_context, process_message
 from app.database import SessionLocal
-from app.models import Appointment, ChatMessage
+from app.models import Appointment, ChatMessage, KnowledgeBase
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -27,23 +27,59 @@ def get_db():
 
 @router.post("/")
 def chat(request: ChatRequest, db: Session = Depends(get_db)):
-    session_messages = chat_sessions.get(request.session_id, [])
-    session_messages.append(request.message)
+    # 1. Save user message to PostgreSQL
     db.add(
-    ChatMessage(
-        session_id=request.session_id,
-        clinic_id=request.clinic_id,
-        role="user",
-        message=request.message,
+        ChatMessage(
+            session_id=request.session_id,
+            clinic_id=request.clinic_id,
+            role="user",
+            message=request.message,
         )
     )
     db.commit()
+
+    # 2. Keep temporary in-memory session
+    session_messages = chat_sessions.get(request.session_id, [])
+    session_messages.append(request.message)
     chat_sessions[request.session_id] = session_messages
 
     combined_message = "\n".join(session_messages)
 
-    result = process_message(combined_message)
+    # 3. Load clinic knowledge
+    knowledge_items = (
+        db.query(KnowledgeBase)
+        .filter(KnowledgeBase.clinic_id == request.clinic_id)
+        .all()
+    )
 
+    knowledge_context = build_knowledge_context(knowledge_items)
+
+    # 4. Process message with AI agent
+    result = process_message(
+        combined_message,
+        knowledge_context,
+    )
+
+    # 5. FAQ answer
+    if result["type"] == "faq":
+        bot_answer = result["answer"]
+
+        db.add(
+            ChatMessage(
+                session_id=request.session_id,
+                clinic_id=request.clinic_id,
+                role="assistant",
+                message=bot_answer,
+            )
+        )
+        db.commit()
+
+        return {
+            "status": "faq_answered",
+            "answer": bot_answer,
+        }
+
+    # 6. Appointment missing data
     if not result["ready"]:
         missing = result["missing"]
 
@@ -58,13 +94,26 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         if "time" in missing:
             questions.append("Ձեզ հարմար օրը և ժամը")
 
+        bot_answer = "Խնդրում եմ նշեք " + ", ".join(questions) + "։"
+
+        db.add(
+            ChatMessage(
+                session_id=request.session_id,
+                clinic_id=request.clinic_id,
+                role="assistant",
+                message=bot_answer,
+            )
+        )
+        db.commit()
+
         return {
             "status": "missing_data",
             "missing": missing,
             "data": result["data"],
-            "answer": "Խնդրում եմ նշեք " + ", ".join(questions) + "։",
+            "answer": bot_answer,
         }
 
+    # 7. Create appointment
     data = result["data"]
 
     appointment = Appointment(
@@ -80,26 +129,27 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(appointment)
 
-    chat_sessions.pop(request.session_id, None)
     bot_answer = (
-    "Խնդրում եմ նշեք "
-    + ", ".join(questions)
-    + "։"
+        "Ձեր հայտը հաջողությամբ գրանցվել է։ "
+        "Կլինիկայի ադմինիստրատորը կկապվի Ձեզ հետ։"
     )
 
     db.add(
-    ChatMessage(
-        session_id=request.session_id,
-        clinic_id=request.clinic_id,
-        role="assistant",
-        message=bot_answer,
-    )
+        ChatMessage(
+            session_id=request.session_id,
+            clinic_id=request.clinic_id,
+            role="assistant",
+            message=bot_answer,
+        )
     )
     db.commit()
-    
+
+    # 8. Clear session after successful appointment
+    chat_sessions.pop(request.session_id, None)
 
     return {
         "status": "appointment_created",
         "appointment_id": appointment.id,
         "data": data,
-        "answer": bot_answer}
+        "answer": bot_answer,
+    }

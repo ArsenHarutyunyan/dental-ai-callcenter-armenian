@@ -88,3 +88,14 @@ class ChatMessage(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     
+class KnowledgeBase(Base):
+    __tablename__ = "knowledge_base"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    clinic_id = Column(Integer, nullable=False)
+
+    category = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+
+    content = Column(String, nullable=False)

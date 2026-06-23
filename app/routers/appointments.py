@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+
 from app.database import SessionLocal
 from app.models import Appointment
 from app.schemas import AppointmentCreate, AppointmentUpdate
-from fastapi import Query
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -17,7 +17,10 @@ def get_db():
 
 
 @router.post("/")
-def create_appointment(request: AppointmentCreate, db: Session = Depends(get_db)):
+def create_appointment(
+    request: AppointmentCreate,
+    db: Session = Depends(get_db),
+):
     appointment = Appointment(
         clinic_id=request.clinic_id,
         patient_id=request.patient_id,
@@ -51,7 +54,10 @@ def get_appointments(
 
 
 @router.get("/{appointment_id}")
-def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
+def get_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+):
     appointment = (
         db.query(Appointment)
         .filter(Appointment.id == appointment_id)
@@ -60,7 +66,9 @@ def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
 
     if not appointment:
         return {"error": "Appointment not found"}
+
     return appointment
+
 
 @router.put("/{appointment_id}")
 def update_appointment(
@@ -88,6 +96,7 @@ def update_appointment(
 
     return appointment
 
+
 @router.delete("/{appointment_id}")
 def delete_appointment(
     appointment_id: int,
@@ -107,7 +116,5 @@ def delete_appointment(
 
     return {
         "status": "deleted",
-        "appointment_id": appointment_id
+        "appointment_id": appointment_id,
     }
-
-

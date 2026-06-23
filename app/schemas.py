@@ -68,3 +68,9 @@ class ChatMessageCreate(BaseModel):
     clinic_id: int
     role: str
     message: str
+    
+class KnowledgeBaseCreate(BaseModel):
+    clinic_id: int
+    category: str
+    title: str
+    content: str
