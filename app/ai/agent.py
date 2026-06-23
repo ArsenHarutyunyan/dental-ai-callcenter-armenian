@@ -6,9 +6,7 @@ from groq import Groq
 
 load_dotenv()
 
-client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
-)
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def build_knowledge_context(items):
@@ -33,40 +31,47 @@ def process_message(
     user_message: str,
     knowledge_context: str = "",
     schedule_context: str = "",
+    patient_context: str = "",
 ):
     prompt = f"""
-You are an AI dental clinic assistant.
+You are an AI dental clinic receptionist.
 
-You must understand Armenian messages.
+You must understand Armenian messages and always answer in Armenian.
 
 Clinic knowledge:
-
 {knowledge_context}
 
 Available schedules:
-
 {schedule_context}
+
+Patient context:
+{patient_context}
 
 Your task is to detect the user's intent.
 
 Possible intents:
-
 1. faq
-2. appointment
-3. schedule_query
+2. price_query
+3. service_query
+4. doctor_query
+5. working_hours_query
+6. schedule_query
+7. appointment
+8. cancel_appointment
+9. reschedule_appointment
 
-If user asks about prices, services, address, doctors, working hours, or general clinic information:
+If user asks about prices, services, doctors, address, working hours, or clinic information:
 Return:
 {{
   "intent": "faq",
-  "answer": "Answer in Armenian using clinic knowledge only."
+  "answer": "Answer in Armenian using only clinic knowledge."
 }}
 
-If user asks whether a time is available, asks about free slots, or asks when the doctor is free:
+If user asks whether a time is available or asks for free slots:
 Return:
 {{
   "intent": "schedule_query",
-  "answer": "Answer in Armenian using available schedules only.",
+  "answer": "Answer in Armenian using only available schedules.",
   "schedule_id": 1
 }}
 
@@ -74,47 +79,41 @@ If matching schedule is not available:
 Return:
 {{
   "intent": "schedule_query",
-  "answer": "Answer in Armenian. Say that the requested time is not available and suggest available schedules if any.",
+  "answer": "Answer in Armenian. Say the requested time is not available and suggest available schedules if any.",
   "schedule_id": null
 }}
 
-If user wants to book an appointment or consultation:
+If user wants to book an appointment:
 Return:
 {{
-  "intent":"appointment",
-  "patient_name":"...",
-  "phone":"...",
-  "complaint":"...",
-  "preferred_time":"...",
+  "intent": "appointment",
+  "patient_name": "...",
+  "phone": "...",
+  "complaint": "...",
+  "preferred_time": "...",
+  "doctor_name": "...",
+  "service_name": "...",
   "schedule_id": 1
 }}
 
-If the user chooses one of the available schedules, include the matching schedule_id.
-If schedule_id is unknown or not selected, use null.
+If user is an existing patient, use patient context to understand previous visits, but do not invent new facts.
 
 Missing values must be null.
 
 Rules:
 - Return JSON only.
 - Do not give medical diagnosis.
-- Do not invent prices, doctors, addresses, or schedules.
-- Use only provided clinic knowledge and available schedules.
-- If information is not available, say that administrator will clarify.
+- Do not invent prices, doctors, addresses, schedules, or patient history.
+- If information is missing, say administrator will clarify.
 - Always answer in Armenian.
 
 User message:
-
 {user_message}
 """
 
     response = client.chat.completions.create(
         model="llama-3.1-8b-instant",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
+        messages=[{"role": "user", "content": prompt}],
         temperature=0,
         response_format={"type": "json_object"},
     )
@@ -122,17 +121,31 @@ User message:
     content = response.choices[0].message.content.strip()
     data = json.loads(content)
 
-    if data["intent"] == "faq":
+    intent = data.get("intent")
+
+    if intent in [
+        "faq",
+        "price_query",
+        "service_query",
+        "doctor_query",
+        "working_hours_query",
+    ]:
         return {
             "type": "faq",
             "answer": data.get("answer"),
         }
 
-    if data["intent"] == "schedule_query":
+    if intent == "schedule_query":
         return {
             "type": "schedule_query",
             "answer": data.get("answer"),
             "schedule_id": data.get("schedule_id"),
+        }
+
+    if intent in ["cancel_appointment", "reschedule_appointment"]:
+        return {
+            "type": "faq",
+            "answer": "Այդ փոփոխությունը կատարելու համար կլինիկայի ադմինիստրատորը կկապվի Ձեզ հետ։",
         }
 
     missing = []

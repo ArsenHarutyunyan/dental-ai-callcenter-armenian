@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -31,6 +33,11 @@ def get_db():
         db.close()
 
 
+def extract_phone_from_text(text: str):
+    match = re.search(r"\+374\d{8}", text)
+    return match.group() if match else None
+
+
 def build_schedule_context(schedules):
     if not schedules:
         return "No available schedules"
@@ -48,6 +55,33 @@ End: {schedule.end_time}
 Status: {schedule.status}
 """
         )
+
+    return "\n".join(parts)
+
+
+def build_patient_context(patient, appointments):
+    if not patient:
+        return "No known patient"
+
+    parts = [
+        f"Patient ID: {patient.id}",
+        f"Full name: {patient.full_name}",
+        f"Phone: {patient.phone}",
+        "Previous appointments:",
+    ]
+
+    if not appointments:
+        parts.append("No previous appointments")
+    else:
+        for appointment in appointments:
+            parts.append(
+                f"""
+Appointment ID: {appointment.id}
+Complaint: {appointment.complaint}
+Preferred time: {appointment.preferred_time}
+Status: {appointment.status}
+"""
+            )
 
     return "\n".join(parts)
 
@@ -106,10 +140,37 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
     schedule_context = build_schedule_context(available_schedules)
 
+    phone_from_text = extract_phone_from_text(combined_message)
+
+    existing_patient = None
+    previous_appointments = []
+
+    if phone_from_text:
+        existing_patient = (
+            db.query(Patient)
+            .filter(Patient.phone == phone_from_text)
+            .first()
+        )
+
+        if existing_patient:
+            previous_appointments = (
+                db.query(Appointment)
+                .filter(Appointment.patient_id == existing_patient.id)
+                .order_by(Appointment.id.desc())
+                .limit(5)
+                .all()
+            )
+
+    patient_context = build_patient_context(
+        existing_patient,
+        previous_appointments,
+    )
+
     result = process_message(
         combined_message,
         knowledge_context,
         schedule_context,
+        patient_context,
     )
 
     if result["type"] == "faq":
@@ -154,9 +215,26 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
             "schedule_id": result.get("schedule_id"),
         }
 
-    if not result["ready"]:
-        missing = result["missing"]
+    data = result["data"]
 
+    if existing_patient and not data.get("patient_name"):
+        data["patient_name"] = existing_patient.full_name
+
+    if existing_patient and not data.get("phone"):
+        data["phone"] = existing_patient.phone
+
+    missing = []
+
+    if not data.get("patient_name"):
+        missing.append("name")
+
+    if not data.get("phone"):
+        missing.append("phone")
+
+    if not data.get("preferred_time"):
+        missing.append("time")
+
+    if missing:
         questions = []
 
         if "name" in missing:
@@ -185,11 +263,9 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         return {
             "status": "missing_data",
             "missing": missing,
-            "data": result["data"],
+            "data": data,
             "answer": bot_answer,
         }
-
-    data = result["data"]
 
     schedule_id = data.get("schedule_id") or session_data.get("selected_schedule_id")
 
@@ -230,7 +306,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         schedule_id=schedule_id,
         patient_name=data["patient_name"],
         phone=data["phone"],
-        complaint=data["complaint"],
+        complaint=data.get("complaint") or "Չնշված գանգատ",
         preferred_time=data["preferred_time"],
         status="new",
     )
