@@ -19,30 +19,27 @@ def get_db():
 @router.post("/")
 def create_appointment(request: AppointmentCreate, db: Session = Depends(get_db)):
     appointment = Appointment(
+        clinic_id=request.clinic_id,
+        patient_id=request.patient_id,
+        doctor_id=request.doctor_id,
+        service_id=request.service_id,
         patient_name=request.patient_name,
         phone=request.phone,
         complaint=request.complaint,
         preferred_time=request.preferred_time,
+        status=request.status,
     )
 
     db.add(appointment)
     db.commit()
     db.refresh(appointment)
 
-    return {
-        "id": appointment.id,
-        "patient_name": appointment.patient_name,
-        "phone": appointment.phone,
-        "complaint": appointment.complaint,
-        "preferred_time": appointment.preferred_time,
-        "status": "created",
-    }
+    return appointment
 
 
 @router.get("/")
 def get_appointments(db: Session = Depends(get_db)):
-    appointments = db.query(Appointment).all()
-    return appointments
+    return db.query(Appointment).all()
 
 
 @router.get("/{appointment_id}")

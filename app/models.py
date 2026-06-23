@@ -1,12 +1,74 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
+
 from app.database import Base
+
+
+class Clinic(Base):
+    __tablename__ = "clinics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    address = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+
+    doctors = relationship("Doctor", back_populates="clinic")
+    services = relationship("Service", back_populates="clinic")
+    appointments = relationship("Appointment", back_populates="clinic")
+
+
+class Patient(Base):
+    __tablename__ = "patients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String, nullable=False)
+    phone = Column(String, nullable=False, index=True)
+
+    appointments = relationship("Appointment", back_populates="patient")
+
+
+class Doctor(Base):
+    __tablename__ = "doctors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False)
+    full_name = Column(String, nullable=False)
+    specialization = Column(String, nullable=True)
+
+    clinic = relationship("Clinic", back_populates="doctors")
+    appointments = relationship("Appointment", back_populates="doctor")
+
+
+class Service(Base):
+    __tablename__ = "services"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    price = Column(Integer, nullable=True)
+
+    clinic = relationship("Clinic", back_populates="services")
+    appointments = relationship("Appointment", back_populates="service")
 
 
 class Appointment(Base):
     __tablename__ = "appointments"
 
     id = Column(Integer, primary_key=True, index=True)
+
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=True)
+    service_id = Column(Integer, ForeignKey("services.id"), nullable=True)
+
     patient_name = Column(String, nullable=False)
     phone = Column(String, nullable=False)
     complaint = Column(String, nullable=False)
     preferred_time = Column(String, nullable=True)
+    status = Column(String, default="new")
+
+    clinic = relationship("Clinic", back_populates="appointments")
+    patient = relationship("Patient", back_populates="appointments")
+    doctor = relationship("Doctor", back_populates="appointments")
+    service = relationship("Service", back_populates="appointments")
