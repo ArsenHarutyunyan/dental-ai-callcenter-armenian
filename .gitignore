@@ -8,3 +8,4 @@ app/voice/models/
 
 # runtime-generated audio cache
 data/cache/
+.env
