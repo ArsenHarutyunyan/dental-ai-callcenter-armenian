@@ -10,6 +10,7 @@ from app.routers import (
     patients,
     schedules,
     services,
+    voice_chat,
 )
 
 app = FastAPI(title="Dental AI Call Center")
@@ -23,6 +24,7 @@ app.include_router(services.router)
 app.include_router(appointments.router)
 app.include_router(knowledge.router)
 app.include_router(schedules.router)
+app.include_router(voice_chat.router)
 
 
 @app.get("/")

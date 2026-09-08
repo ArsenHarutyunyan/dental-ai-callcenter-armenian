@@ -1,12 +1,32 @@
 import json
 import os
 
+import requests
 from dotenv import load_dotenv
-from groq import Groq
 
 load_dotenv()
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/chat")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
+
+
+def call_local_llm(prompt: str) -> str:
+    """Local, fully offline replacement for the Groq call. Same contract:
+    takes the full prompt, returns raw JSON text."""
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": OLLAMA_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "format": "json",
+            "stream": False,
+            "think": False,  # qwen3 "thinking" mode would pollute JSON output
+            "options": {"temperature": 0},
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()["message"]["content"].strip()
 
 
 def build_knowledge_context(items):
@@ -111,14 +131,7 @@ User message:
 {user_message}
 """
 
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-        response_format={"type": "json_object"},
-    )
-
-    content = response.choices[0].message.content.strip()
+    content = call_local_llm(prompt)
     data = json.loads(content)
 
     intent = data.get("intent")

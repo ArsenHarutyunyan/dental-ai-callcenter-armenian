@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# fine-tuned model weights - too large for git, fetched/copied separately
+app/voice/models/
+
+# runtime-generated audio cache
+data/cache/
